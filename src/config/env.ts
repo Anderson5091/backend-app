@@ -13,6 +13,13 @@ export const ENV = {
   BACKUP_DIR: process.env.BACKUP_DIR || "./backups",
   REDIS_URL: process.env.REDIS_URL || "",
 
+  // Brevo (SMS/Email) Configuration
+  BREVO_API_KEY: process.env.BREVO_API_KEY || "",
+  BREVO_EMAIL_API_KEY: process.env.BREVO_EMAIL_API_KEY || "",
+  BREVO_SMS_SENDER: process.env.BREVO_SMS_SENDER || "AuthOTP",
+  BREVO_EMAIL_FROM: process.env.BREVO_EMAIL_FROM || "auth@quicksend.com",
+  BREVO_EMAIL_NAME: process.env.BREVO_EMAIL_NAME || "Quick Send",
+
   // Crossmint Configuration
   CROSSMINT_API_KEY: process.env.CROSSMINT_API_KEY || "",
   CROSSMINT_BASE_URL: process.env.CROSSMINT_BASE_URL || "",

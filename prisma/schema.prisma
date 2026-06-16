@@ -8,13 +8,14 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  phone     String?
-  password  String
-  fullName  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phone         String?
+  phoneVerified Boolean  @default(false)
+  password      String
+  fullName      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   wallets         Wallet[]
   transfers       Transfer[]
@@ -27,6 +28,19 @@ model User {
   riskScore       RiskScore?
   notifications   Notification[]
   cryptoWallets   UserCryptoWallet[]
+  otpCodes        OtpCode[]
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  type      String   @default("PHONE_VERIFICATION")
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 model UserCryptoWallet {

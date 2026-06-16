@@ -9,6 +9,7 @@ import { authLimiter } from "../../middleware/rateLimiter";
 import { authenticate, AuthRequest } from "../../middleware/auth";
 import { crossmintService, type ChainType } from "../../services/crossmint.service";
 import { ledgerService } from "../ledger/ledger.service";
+import { otpService } from "./otp.service";
 import { logger } from "../../utils/logger";
 
 const router = Router();
@@ -16,6 +17,7 @@ const router = Router();
 const registerSchema = z.object({
   email: z.string().email(),
   phone: z.string().optional(),
+  fullName: z.string().optional(),
   password: z.string().min(8),
 });
 
@@ -60,7 +62,7 @@ router.post("/register", authLimiter, async (req: Request, res: Response) => {
   const password = await bcrypt.hash(data.password, 12);
 
   const user = await prisma.user.create({
-    data: { email: data.email, phone: data.phone, password },
+    data: { email: data.email, phone: data.phone, fullName: data.fullName, password },
   });
 
   const wallet = await prisma.wallet.create({
@@ -72,7 +74,7 @@ router.post("/register", authLimiter, async (req: Request, res: Response) => {
   await prisma.walletTransaction.create({
     data: {
       walletId: wallet.id,
-      type: "CREDIT",
+      type: "DEPOSIT",
       amount: 2,
       status: "COMPLETED",
     },
@@ -80,11 +82,61 @@ router.post("/register", authLimiter, async (req: Request, res: Response) => {
 
   await createUserCryptoWallets(user.id);
 
+  if (user.phone) {
+    await otpService.sendOtp(user.id, user.phone, user.email ?? undefined);
+  }
+
+  const maskPhone = (p: string) => p.length > 4 ? p.slice(0, 3) + "****" + p.slice(-2) : p;
+
+  res.status(201).json({
+    userId: user.id,
+    email: user.email,
+    phone: user.phone ? maskPhone(user.phone) : null,
+    message: "Account created. Please verify your phone number.",
+  });
+});
+
+router.post("/send-otp", authLimiter, async (req: Request, res: Response) => {
+  const { userId } = req.body;
+  if (!userId) throw new AppError(400, "userId required");
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User not found");
+  if (!user.phone) throw new AppError(400, "No phone number on file");
+
+  await otpService.sendOtp(user.id, user.phone, user.email ?? undefined);
+
+  res.json({ message: "OTP sent via SMS" });
+});
+
+router.post("/send-otp-email", authLimiter, async (req: Request, res: Response) => {
+  const { userId } = req.body;
+  if (!userId) throw new AppError(400, "userId required");
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User not found");
+  if (!user.email) throw new AppError(400, "No email on file");
+
+  await otpService.sendOtpEmailOnly(user.id, user.email);
+
+  res.json({ message: "OTP sent via email" });
+});
+
+router.post("/verify-otp", authLimiter, async (req: Request, res: Response) => {
+  const { userId, code } = req.body;
+  if (!userId || !code) throw new AppError(400, "userId and code required");
+
+  const valid = await otpService.verifyOtp(userId, code);
+  if (!valid) throw new AppError(400, "Invalid or expired OTP");
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, "User not found");
+
   const token = generateToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
 
-  res.status(201).json({
-    user: { id: user.id, email: user.email },
+  res.json({
+    user: { id: user.id, email: user.email, fullName: user.fullName, phoneVerified: user.phoneVerified },
     token,
     refreshToken,
   });
@@ -99,11 +151,15 @@ router.post("/login", authLimiter, async (req: Request, res: Response) => {
   const valid = await bcrypt.compare(data.password, user.password);
   if (!valid) throw new AppError(401, "Invalid credentials");
 
+  if (!user.phoneVerified) {
+    throw new AppError(403, "Phone number not verified. Please verify your phone first.");
+  }
+
   const token = generateToken(user.id);
   const refreshToken = generateRefreshToken(user.id);
 
   res.json({
-    user: { id: user.id, email: user.email },
+    user: { id: user.id, email: user.email, fullName: user.fullName, phoneVerified: user.phoneVerified },
     token,
     refreshToken,
   });
