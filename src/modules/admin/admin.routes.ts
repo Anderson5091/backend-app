@@ -5,24 +5,40 @@ import { authenticate, AuthRequest, requireRole } from "../../middleware/auth";
 const router = Router();
 
 router.get("/dashboard", authenticate, requireRole("SUPER_ADMIN", "COMPLIANCE", "TREASURY", "OPS"), async (_req: AuthRequest, res: Response) => {
-  const totalUsers = await prisma.user.count();
-  const activeTransfers = await prisma.transfer.count({
-    where: { status: { in: ["PENDING_PAYOUT", "SENT_TO_PARTNER"] } },
-  });
-  const pendingKyc = await prisma.kycProfile.count({ where: { status: "PENDING" } });
-  const treasuryBalance = await prisma.treasuryWallet.aggregate({ _sum: { balance: true } });
-  const failedPayouts = await prisma.payoutOrder.count({ where: { status: "FAILED" } });
-  const alerts = await prisma.systemAlert.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "desc" }, take: 10 });
-  const recentActivity = await prisma.adminActionLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 });
+  const [totalUsers, activeUsers, totalTransfers, pendingKyc, totalVolume, failedPayouts, openCases, fraudAlerts, alerts, recentActivity] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { wallets: { some: { status: "ACTIVE" } } } }),
+    prisma.transfer.count({ where: { status: { in: ["PENDING_PAYOUT", "SENT_TO_PARTNER"] } } }),
+    prisma.kycProfile.count({ where: { status: "PENDING" } }),
+    prisma.treasuryWallet.aggregate({ _sum: { balance: true } }),
+    prisma.payoutOrder.count({ where: { status: "FAILED" } }),
+    prisma.complianceCase.count({ where: { status: { in: ["OPEN", "INVESTIGATING"] } } }),
+    prisma.systemAlert.count({ where: { severity: { in: ["CRITICAL", "HIGH"] }, status: "OPEN" } }),
+    prisma.systemAlert.findMany({ where: { status: "OPEN" }, orderBy: { createdAt: "desc" }, take: 10 }),
+    prisma.adminActionLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
+  ]);
 
   res.json({
     totalUsers,
-    activeTransfers,
+    activeUsers,
+    totalTransfers,
+    totalVolume: Number(totalVolume._sum.balance) || 0,
     pendingKyc,
-    treasuryBalance: Number(treasuryBalance._sum.balance) || 0,
     failedPayouts,
-    alerts,
-    recentActivity,
+    openCases,
+    fraudAlerts,
+    alerts: alerts.map((a: { id: string; severity: string; message: string | null; createdAt: Date }) => ({
+      id: a.id,
+      severity: a.severity as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+      message: a.message || "",
+      timestamp: a.createdAt,
+    })),
+    recentActivity: recentActivity.map((r: { id: string; action: string; entity: string | null; adminId: string; createdAt: Date }) => ({
+      id: r.id,
+      action: r.action,
+      user: r.entity || r.adminId || "System",
+      timestamp: r.createdAt,
+    })),
   });
 });
 
