@@ -45,14 +45,23 @@ router.get("/dashboard", authenticate, requireRole("SUPER_ADMIN", "COMPLIANCE", 
 router.get("/users", authenticate, requireRole("SUPER_ADMIN", "OPS"), async (_req: AuthRequest, res: Response) => {
   const users = await prisma.user.findMany({
     select: {
-      id: true, email: true, fullName: true, createdAt: true,
+      id: true, email: true, fullName: true, status: true, createdAt: true,
       kycProfile: { select: { tier: true, status: true } },
       _count: { select: { transfers: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
-  res.json(users);
+  res.json(users.map((u: { id: string; email: string; fullName: string | null; status: string | null; createdAt: Date; kycProfile: { tier: number | null; status: string | null } | null; _count: { transfers: number } }) => ({
+    id: u.id,
+    email: u.email,
+    name: u.fullName || u.email,
+    status: u.status || "ACTIVE",
+    kycTier: u.kycProfile?.tier ?? 0,
+    totalTransfers: u._count.transfers,
+    totalVolume: 0,
+    createdAt: u.createdAt,
+  })));
 });
 
 router.post("/users/:id/toggle-status", authenticate, requireRole("SUPER_ADMIN"), async (req: AuthRequest, res: Response) => {

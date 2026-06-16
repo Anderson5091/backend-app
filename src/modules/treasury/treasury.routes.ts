@@ -14,11 +14,25 @@ router.get("/overview", authenticate, async (_req: AuthRequest, res: Response) =
     orderBy: { createdAt: "desc" },
     take: 10,
   });
+  const snapshots = await prisma.liquiditySnapshot.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 7,
+  });
 
-  const totalReserves = wallets.reduce(
+  const totalLiquidity = wallets.reduce(
     (sum: number, w: { balance: { toString: () => string } }) => sum + Number(w.balance),
     0
   );
+  const hotTotal = wallets
+    .filter((w: { walletType: string }) => w.walletType === "HOT")
+    .reduce((sum: number, w: { balance: { toString: () => string } }) => sum + Number(w.balance), 0);
+  const warmTotal = wallets
+    .filter((w: { walletType: string }) => w.walletType === "WARM")
+    .reduce((sum: number, w: { balance: { toString: () => string } }) => sum + Number(w.balance), 0);
+  const coldTotal = wallets
+    .filter((w: { walletType: string }) => w.walletType === "COLD")
+    .reduce((sum: number, w: { balance: { toString: () => string } }) => sum + Number(w.balance), 0);
+  const networks = [...new Set(wallets.map((w: { network: string }) => w.network))];
 
   const onChainBalances: Record<string, number> = {};
   for (const wallet of wallets) {
@@ -34,7 +48,7 @@ router.get("/overview", authenticate, async (_req: AuthRequest, res: Response) =
     }
   }
 
-  res.json({ wallets, totalReserves, onChainBalances, recentMovements: movements });
+  res.json({ totalLiquidity, hotTotal, warmTotal, coldTotal, networks, wallets, recentMovements: movements, snapshots });
 });
 
 router.get("/liquidity", authenticate, async (_req: AuthRequest, res: Response) => {
