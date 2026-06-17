@@ -8,7 +8,7 @@ export const ENV = {
   JWT_SECRET: process.env.JWT_SECRET || "change-me",
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "15m",
   REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
-  CORS_ORIGIN: process.env.CORS_ORIGIN || "http://localhost:5173",
+  CORS_ORIGINS: (process.env.CORS_ORIGIN || "http://localhost:5173").split(",").map((s) => s.trim()),
   LOG_LEVEL: process.env.LOG_LEVEL || "info",
   BACKUP_DIR: process.env.BACKUP_DIR || "./backups",
   REDIS_URL: process.env.REDIS_URL || "",
