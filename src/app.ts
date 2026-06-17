@@ -30,10 +30,10 @@ const httpServer = createServer(app);
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || ENV.CORS_ORIGINS.includes(origin)) {
+    if (!origin || ENV.CORS_ORIGINS.some((o) => origin.startsWith(o))) {
       callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     }
   },
   credentials: true,
