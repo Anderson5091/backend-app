@@ -5,7 +5,6 @@ import { prisma } from "../../config/database";
 import { ENV } from "../../config/env";
 import { generateToken, generateRefreshToken } from "../../utils/token";
 import { AppError } from "../../middleware/errorHandler";
-import { authLimiter } from "../../middleware/rateLimiter";
 import { authenticate, AuthRequest } from "../../middleware/auth";
 import { crossmintService, type ChainType } from "../../services/crossmint.service";
 import { ledgerService } from "../ledger/ledger.service";
@@ -31,6 +30,10 @@ async function createUserCryptoWallets(userId: string) {
   const chains = ENV.NETWORK_CHAIN;
 
   for (let i = 0; i < networks.length; i++) {
+    if (i >= chains.length) {
+      logger.warn(`[Auth] No chain configured for network ${networks[i]}, skipping`);
+      continue;
+    }
     const chain = chains[i] as ChainType;
     try {
       const wallet = await crossmintService.createWallet(chain, "DEPOSIT");
@@ -53,7 +56,7 @@ async function createUserCryptoWallets(userId: string) {
   }
 }
 
-router.post("/register", authLimiter, async (req: Request, res: Response) => {
+router.post("/register", async (req: Request, res: Response) => {
   const data = registerSchema.parse(req.body);
 
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
@@ -96,7 +99,7 @@ router.post("/register", authLimiter, async (req: Request, res: Response) => {
   });
 });
 
-router.post("/send-otp", authLimiter, async (req: Request, res: Response) => {
+router.post("/send-otp", async (req: Request, res: Response) => {
   const { userId } = req.body;
   if (!userId) throw new AppError(400, "userId required");
 
@@ -109,7 +112,7 @@ router.post("/send-otp", authLimiter, async (req: Request, res: Response) => {
   res.json({ message: "OTP sent via SMS" });
 });
 
-router.post("/send-otp-email", authLimiter, async (req: Request, res: Response) => {
+router.post("/send-otp-email", async (req: Request, res: Response) => {
   const { userId } = req.body;
   if (!userId) throw new AppError(400, "userId required");
 
@@ -122,7 +125,7 @@ router.post("/send-otp-email", authLimiter, async (req: Request, res: Response) 
   res.json({ message: "OTP sent via email" });
 });
 
-router.post("/verify-otp", authLimiter, async (req: Request, res: Response) => {
+router.post("/verify-otp", async (req: Request, res: Response) => {
   const { userId, code } = req.body;
   if (!userId || !code) throw new AppError(400, "userId and code required");
 
@@ -142,7 +145,7 @@ router.post("/verify-otp", authLimiter, async (req: Request, res: Response) => {
   });
 });
 
-router.post("/login", authLimiter, async (req: Request, res: Response) => {
+router.post("/login", async (req: Request, res: Response) => {
   const data = loginSchema.parse(req.body);
 
   const user = await prisma.user.findUnique({ where: { email: data.email } });
