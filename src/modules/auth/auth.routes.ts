@@ -85,9 +85,7 @@ router.post("/register", async (req: Request, res: Response) => {
 
   await createUserCryptoWallets(user.id);
 
-  if (user.phone) {
-    await otpService.sendOtp(user.id, user.phone, user.email ?? undefined);
-  }
+  await otpService.sendOtp(user.id, user.phone || "", user.email);
 
   const maskPhone = (p: string) => p.length > 4 ? p.slice(0, 3) + "****" + p.slice(-2) : p;
 
@@ -107,9 +105,9 @@ router.post("/send-otp", async (req: Request, res: Response) => {
   if (!user) throw new AppError(404, "User not found");
   if (!user.phone) throw new AppError(400, "No phone number on file");
 
-  await otpService.sendOtp(user.id, user.phone, user.email ?? undefined);
+  await otpService.sendOtp(user.id, user.phone, user.email);
 
-  res.json({ message: "OTP sent via SMS" });
+  res.json({ message: "OTP sent" });
 });
 
 router.post("/send-otp-email", async (req: Request, res: Response) => {
