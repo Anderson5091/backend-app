@@ -78,6 +78,7 @@ export class DepositService {
           type: "DEPOSIT",
           amount: 0,
           network: chain.toUpperCase(),
+          txHash: depositRequest.id,
           status: "PENDING",
         },
       });
@@ -105,7 +106,7 @@ export class DepositService {
 
     if (!depositWallet || depositWallet.depositRequests.length === 0) {
       logger.warn(`[Deposit] Unknown deposit wallet: ${crossmintWalletId}`);
-      return;
+      return null;
     }
 
     const depositRequest = depositWallet.depositRequests[0];
@@ -135,6 +136,8 @@ export class DepositService {
         data: { txHash, status: "DETECTED" },
       });
     }
+
+    return depositRequest.id;
   }
 
   async approveDeposit(depositRequestId: string) {

@@ -3,12 +3,17 @@ import { prisma } from "../../config/database";
 import { logger } from "../../utils/logger";
 import { Resend } from "resend";
 import twilio from "twilio";
+import { AppError } from "../../middleware/errorHandler";
 
 function generateOtpCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend =
+  process.env.RESEND_API_KEY
+    ? new Resend(process.env.RESEND_API_KEY)
+    : null;
+
 const from = process.env.EMAIL_FROM || "Quick Send <noreply@quicksend.com.mx>";
 
 const twilioClient =
@@ -18,10 +23,9 @@ const twilioClient =
 
 const twilioFrom = process.env.TWILIO_PHONE_NUMBER || "";
 
-async function sendSms(phone: string, code: string): Promise<boolean> {
+async function sendSms(phone: string, code: string): Promise<void> {
   if (!twilioClient || !twilioFrom) {
-    logger.warn("[OTP] Twilio not configured, skipping SMS");
-    return false;
+    throw new AppError(500, "SMS service not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in .env");
   }
 
   try {
@@ -32,11 +36,30 @@ async function sendSms(phone: string, code: string): Promise<boolean> {
     });
 
     logger.info(`[OTP] SMS sent to ${phone}`);
-    return true;
   } catch (error: any) {
     logger.error(`[OTP] SMS failed for ${phone}: ${error.message}`);
-    return false;
+    throw new AppError(500, `Failed to send SMS: ${error.message}`);
   }
+}
+
+async function sendEmail(to: string, code: string): Promise<void> {
+  if (!resend) {
+    throw new AppError(500, "Email service not configured. Set RESEND_API_KEY in .env");
+  }
+
+  const { error } = await resend.emails.send({
+    from,
+    to,
+    subject: "Your Quick Send verification code",
+    html: `<h2>Quick Send Verification</h2><p>Your verification code is: <strong>${code}</strong></p><p>This code expires in 5 minutes.</p>`,
+  });
+
+  if (error) {
+    logger.error(`[OTP] Email failed for ${to}: ${error.message}`);
+    throw new AppError(500, `Failed to send email: ${error.message}`);
+  }
+
+  logger.info(`[OTP] Email sent to ${to}`);
 }
 
 export const otpService = {
@@ -48,23 +71,29 @@ export const otpService = {
       data: { userId, code, type: "PHONE_VERIFICATION", expiresAt },
     });
 
+    let smsSent = false;
+    let emailSent = false;
+
     if (phone) {
-      await sendSms(phone, code);
+      try {
+        await sendSms(phone, code);
+        smsSent = true;
+      } catch (err: any) {
+        logger.warn(`[OTP] SMS failed, will try email only: ${err.message}`);
+      }
     }
 
     if (email) {
-      const { error } = await resend.emails.send({
-        from,
-        to: email,
-        subject: "Your Quick Send verification code",
-        html: `<h2>Quick Send Verification</h2><p>Your verification code is: <strong>${code}</strong></p><p>This code expires in 5 minutes.</p>`,
-      });
-
-      if (error) {
-        logger.error(`[OTP] Email failed for ${email}: ${error.message}`);
-      } else {
-        logger.info(`[OTP] Email sent to ${email}`);
+      try {
+        await sendEmail(email, code);
+        emailSent = true;
+      } catch (err: any) {
+        logger.warn(`[OTP] Email failed: ${err.message}`);
       }
+    }
+
+    if (!smsSent && !emailSent) {
+      throw new AppError(500, "Unable to send verification code. Please check your contact info or try again later.");
     }
 
     return code;
@@ -78,18 +107,7 @@ export const otpService = {
       data: { userId, code, type: "PHONE_VERIFICATION", expiresAt },
     });
 
-    const { error } = await resend.emails.send({
-      from,
-      to: email,
-      subject: "Your Quick Send verification code",
-      html: `<h2>Quick Send Verification</h2><p>Your verification code is: <strong>${code}</strong></p><p>This code expires in 5 minutes.</p>`,
-    });
-
-    if (error) {
-      logger.error(`[OTP] Email failed for ${email}: ${error.message}`);
-    } else {
-      logger.info(`[OTP] Email sent to ${email}`);
-    }
+    await sendEmail(email, code);
 
     return code;
   },
