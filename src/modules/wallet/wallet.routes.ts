@@ -136,12 +136,15 @@ router.get("/transactions", authenticate, async (req: AuthRequest, res: Response
 
 const internalTransferSchema = z.object({
   recipientEmail: z.string().email(),
-  amount: z.string().refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, "Amount must be a positive number"),
+  amount: z.union([z.string(), z.number()]).refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0,
+    "Amount must be a positive number"
+  ),
 });
 
 router.post("/internal-transfer", authenticate, async (req: AuthRequest, res: Response) => {
   const { recipientEmail, amount } = internalTransferSchema.parse(req.body);
-  const amountNum = parseFloat(amount);
+  const amountNum = Number(amount);
 
   if (req.userId === undefined) return res.status(401).json({ error: "Unauthorized" });
 
