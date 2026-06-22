@@ -65,11 +65,6 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response) => {
     where: { userId: req.userId },
   });
 
-  const balance = await prisma.ledgerEntry.aggregate({
-    where: { walletId: wallet.id },
-    _sum: { amount: true },
-  });
-
   const credits = await prisma.ledgerEntry.aggregate({
     where: { walletId: wallet.id, type: "CREDIT" },
     _sum: { amount: true },
@@ -82,13 +77,22 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response) => {
 
   const availableBalance = Number(credits._sum.amount || 0) - Number(debits._sum.amount || 0);
 
+  const pendingOut = await prisma.walletTransaction.aggregate({
+    where: {
+      walletId: wallet.id,
+      type: { in: ["TRANSFER", "WITHDRAWAL"] },
+      status: { not: "COMPLETED" },
+    },
+    _sum: { amount: true },
+  });
+
   res.json({
     id: wallet.id,
     userId: wallet.userId,
     currency: wallet.currency,
     status: wallet.status,
     availableBalance: availableBalance.toFixed(2),
-    pendingBalance: "0.00",
+    pendingBalance: Number(pendingOut._sum.amount || 0).toFixed(2),
     cryptoWallets: depositWallets.map((w: { alias: string; chain: string; address: string }) => ({
       network: w.alias.toUpperCase(),
       chain: w.chain,
