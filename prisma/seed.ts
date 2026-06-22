@@ -10,6 +10,28 @@ const ADMINS = [
   { email: "treasury@quicksend.com", password: "treasury123", role: "TREASURY" },
 ];
 
+const AGENTS = [
+  {
+    email: "partner@quicksend.com",
+    password: "partner123",
+    fullName: "John Partner",
+    type: "PARTNER",
+    wallets: [
+      { walletType: "BASE_TREASURY", balance: 100000 },
+      { walletType: "COMMISSION", balance: 5000 },
+    ],
+  },
+  {
+    email: "internal@quicksend.com",
+    password: "internal123",
+    fullName: "Jane Internal",
+    type: "INTERNAL",
+    wallets: [
+      { walletType: "COMMISSION", balance: 2500 },
+    ],
+  },
+];
+
 async function main() {
   for (const admin of ADMINS) {
     const existing = await prisma.adminUser.findUnique({ where: { email: admin.email } });
@@ -28,6 +50,40 @@ async function main() {
       },
     });
     console.log(`Created admin ${admin.email} with role ${admin.role}`);
+  }
+
+  for (const agentData of AGENTS) {
+    const existing = await prisma.agent.findUnique({ where: { email: agentData.email } });
+    if (existing) {
+      console.log(`Agent ${agentData.email} already exists — skipping`);
+      continue;
+    }
+
+    const passwordHash = await bcrypt.hash(agentData.password, 12);
+    const agent = await prisma.agent.create({
+      data: {
+        email: agentData.email,
+        passwordHash,
+        fullName: agentData.fullName,
+        type: agentData.type,
+        status: "ACTIVE",
+      },
+    });
+
+    for (const wallet of agentData.wallets) {
+      await prisma.agentWallet.create({
+        data: {
+          agentId: agent.id,
+          walletType: wallet.walletType,
+          network: "BASE",
+          chain: "base",
+          address: `seed_${agentData.type}_${wallet.walletType}_${agent.id}`,
+          balance: wallet.balance,
+        },
+      });
+    }
+
+    console.log(`Created agent ${agentData.email} (${agentData.type}) with wallet(s)`);
   }
 }
 
