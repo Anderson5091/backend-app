@@ -100,6 +100,21 @@ export const otpService = {
   },
 
   async sendOtpEmailOnly(userId: string, email: string): Promise<string> {
+    const existing = await prisma.otpCode.findFirst({
+      where: {
+        userId,
+        type: "PHONE_VERIFICATION",
+        verified: false,
+        expiresAt: { gte: new Date(Date.now() + 2 * 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existing) {
+      await sendEmail(email, existing.code);
+      return existing.code;
+    }
+
     const code = generateOtpCode();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
