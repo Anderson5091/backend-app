@@ -76,7 +76,7 @@ export class PayoutOrchestrator {
         },
       });
 
-      if (response.status === "SUCCESS" || response.status === "READY_FOR_PICKUP") {
+      if (response.status === "SUCCESS") {
         await prisma.walletTransaction.updateMany({
           where: { payoutOrderId: order.id },
           data: { status: "COMPLETED" },
