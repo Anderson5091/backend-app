@@ -95,6 +95,18 @@ export class AgentService {
         data: { balance: { decrement: usdtAmount } },
       });
 
+      await prisma.treasuryMovement.create({
+        data: {
+          fromWallet: "HOT",
+          toWallet: "AGENT_DEPOSIT",
+          fromWalletId: hotWallet.id,
+          amount: usdtAmount,
+          network: hotWallet.network,
+          reason: `Agent ${agentId} deposit to user ${userId}`,
+          status: "COMPLETED",
+        },
+      });
+
       if (commission > 0) {
         await prisma.agent.update({
           where: { id: agentId },
@@ -259,16 +271,9 @@ export class AgentService {
     const netAmount = payload.amount - commission;
 
     let beneficiaryId = payload.beneficiaryId;
+    let treasurySource: { id: string; network: string } | null = null;
 
-    if (payload.userId) {
-      const userWallet = await prisma.wallet.findFirst({ where: { userId: payload.userId } });
-      if (!userWallet) throw new Error("User wallet not found");
-
-      const balance = await ledgerService.getBalance(userWallet.id);
-      if (balance < payload.amount) throw new Error("Insufficient user balance");
-
-      await ledgerService.debit(userWallet.id, payload.amount, `agent_transfer_${agentId}_${Date.now()}`);
-    } else {
+    if (agent.type === "PARTNER") {
       const baseWallet = (agent.wallets as AgentWalletRow[]).find((w) => w.walletType === "BASE_TREASURY");
       if (!baseWallet) throw new Error("Agent base treasury wallet not found");
       if (Number(baseWallet.balance) < payload.amount) {
@@ -279,6 +284,21 @@ export class AgentService {
         where: { id: baseWallet.id },
         data: { balance: { decrement: payload.amount } },
       });
+    } else {
+      const hotWallet = await prisma.treasuryWallet.findFirst({
+        where: { walletType: "HOT" },
+      });
+      if (!hotWallet) throw new Error("System hot treasury wallet not found");
+      if (Number(hotWallet.balance) < payload.amount) {
+        throw new Error("Insufficient system treasury balance");
+      }
+
+      await prisma.treasuryWallet.update({
+        where: { id: hotWallet.id },
+        data: { balance: { decrement: payload.amount } },
+      });
+
+      treasurySource = { id: hotWallet.id, network: hotWallet.network };
     }
 
     if (commission > 0) {
@@ -307,6 +327,20 @@ export class AgentService {
 
     if (!beneficiaryId) throw new Error("beneficiaryId or inline beneficiary details required");
 
+    if (treasurySource) {
+      await prisma.treasuryMovement.create({
+        data: {
+          fromWallet: "HOT",
+          toWallet: "AGENT_TRANSFER",
+          fromWalletId: treasurySource.id,
+          amount: payload.amount,
+          network: treasurySource.network,
+          reason: `Agent ${agentId} transfer to beneficiary ${beneficiaryId}`,
+          status: "COMPLETED",
+        },
+      });
+    }
+
     const referenceId = `at_${agentId}_${Date.now()}`;
 
     const transfer = await prisma.transfer.create({
@@ -332,21 +366,6 @@ export class AgentService {
       where: { id: transfer.id },
       data: { payoutOrderId: payoutOrder.id },
     });
-
-    if (payload.userId) {
-      const wallet = await prisma.wallet.findFirst({ where: { userId: payload.userId } });
-      if (wallet) {
-        await prisma.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            type: "AGENT_TRANSFER",
-            amount: netAmount,
-            status: "PENDING",
-            payoutOrderId: payoutOrder.id,
-          },
-        });
-      }
-    }
 
     const agentTx = await prisma.agentTransaction.create({
       data: {
@@ -407,6 +426,18 @@ export class AgentService {
     await prisma.treasuryWallet.update({
       where: { id: hotWallet.id },
       data: { balance: { decrement: usdtAmount } },
+    });
+
+    await prisma.treasuryMovement.create({
+      data: {
+        fromWallet: "HOT",
+        toWallet: "PARTNER_TOPUP",
+        fromWalletId: hotWallet.id,
+        amount: usdtAmount,
+        network: hotWallet.network,
+        reason: `Internal agent ${internalAgentId} topped up partner ${partnerAgentId}`,
+        status: "COMPLETED",
+      },
     });
 
     await prisma.agentWallet.update({
@@ -543,10 +574,39 @@ export class AgentService {
         id: w.id,
         walletType: w.walletType,
         network: w.network,
-        address: w.address,
         balance: Number(w.balance),
       })),
     };
+  }
+
+  async upgradeAgentWallet(agentId: string) {
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      include: { wallets: true },
+    });
+    if (!agent) throw new Error("Agent not found");
+
+    const currentWallet = (agent.wallets as AgentWalletRow[]).find((w) => w.walletType === "BASE_TREASURY");
+    if (!currentWallet) throw new Error("Agent has no BASE_TREASURY wallet");
+
+    if (!currentWallet.address.startsWith("agent_base_treasury_")) {
+      return { upgraded: false, message: "Agent already has a real wallet", address: currentWallet.address };
+    }
+
+    const { crossmintService } = await import("../../services/crossmint.service");
+    const crossmintWallet = await crossmintService.createWallet("base", "AGENT", agent.id, `agent_${agent.id}`);
+
+    await prisma.agentWallet.update({
+      where: { id: currentWallet.id },
+      data: {
+        address: crossmintWallet.address,
+        crossmintWalletId: crossmintWallet.crossmintWalletId,
+        walletLocator: crossmintWallet.walletLocator,
+      },
+    });
+
+    logger.info(`[Agent] Upgraded wallet for agent ${agentId}: ${crossmintWallet.address}`);
+    return { upgraded: true, message: "Wallet upgraded to real Crossmint wallet" };
   }
 
   async recordKpi(agentId: string, volume: number, commission: number) {
