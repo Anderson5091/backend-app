@@ -193,7 +193,7 @@ router.post("/:id/withdraw-commission", authenticate, requireRole("AGENT_PARTNER
   }
 });
 
-router.get("/:id/kpi", authenticate, async (req: AuthRequest, res: Response) => {
+router.get("/kpi/:id/", authenticate, async (req: AuthRequest, res: Response) => {
   const { period } = req.query;
   const kpi = await agentService.getAgentKpi(
     String(req.params.id),
