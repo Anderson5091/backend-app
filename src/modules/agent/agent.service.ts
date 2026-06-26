@@ -243,6 +243,7 @@ export class AgentService {
         country: string;
         bankName?: string;
         accountNumber?: string;
+        accountCurrency?: string;
         mobileWalletNumber?: string;
         mobileProvider?: string;
         cashPickupLocation?: string;
@@ -311,6 +312,7 @@ export class AgentService {
           payoutMethod: payload.payoutMethod,
           bankName: payload.beneficiary.bankName || null,
           accountNumber: payload.beneficiary.accountNumber || null,
+          accountCurrency: payload.beneficiary.accountCurrency || null,
           mobileWalletNumber: payload.beneficiary.mobileWalletNumber || null,
           mobileProvider: payload.beneficiary.mobileProvider || null,
           cashPickupLocation: payload.beneficiary.cashPickupLocation || null,

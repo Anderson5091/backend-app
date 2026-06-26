@@ -99,6 +99,7 @@ model Beneficiary {
   payoutMethod       String
   bankName           String?
   accountNumber      String?
+  accountCurrency    String?
   mobileWalletNumber String?
   mobileProvider     String?
   cashPickupLocation String?

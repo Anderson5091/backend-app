@@ -13,23 +13,33 @@ const createSchema = z.object({
   beneficiaryId: z.string(),
   amount: z.number().positive(),
   payoutMethod: z.enum(["BANK", "MOBILE_MONEY", "CASH_PICKUP"]),
-  currency: z.string().default("USD"),
+  accountCurrency: z.string().optional(),
 });
 
 const orchestrator = new TransferOrchestrator();
 
 router.post("/quote", async (req: AuthRequest, res: Response) => {
-  const { amount, currency, country, method } = req.body;
-  const fxRate = await fxService.getRate("USDT", currency || "USD");
+  const { amount, currency, country, method, accountCurrency } = req.body;
+  const destCurrency = currency || await fxService.resolveCurrency(country, method, accountCurrency);
+  const fxRate = await fxService.getRate("USDT", destCurrency);
   const { fee } = await feeService.calculate(country, method, amount);
   const destinationAmount = (amount - fee) * fxRate;
 
-  res.json({ amount, fee, fxRate, destinationAmount, currency: currency || "USD" });
+  res.json({ amount, fee, fxRate, destinationAmount, currency: destCurrency });
 });
 
 router.post("/", authenticate, idempotencyMiddleware, async (req: AuthRequest, res: Response) => {
   const data = createSchema.parse(req.body);
-  const transfer = await orchestrator.createTransfer(data, req.userId!);
+  const beneficiary = await prisma.beneficiary.findUnique({ where: { id: data.beneficiaryId } });
+  const currency = await fxService.resolveCurrency(
+    beneficiary?.country || "US",
+    data.payoutMethod,
+    data.accountCurrency || beneficiary?.accountCurrency,
+  );
+  const transfer = await orchestrator.createTransfer(
+    { ...data, currency },
+    req.userId!,
+  );
   res.status(201).json(transfer);
 });
 
