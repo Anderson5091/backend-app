@@ -2,11 +2,8 @@ import { prisma } from "../../config/database";
 import { lockService } from "../../services/lock.service";
 import { ledgerService } from "../ledger/ledger.service";
 import { eventEmitter } from "../events/event.emitter";
-import { PayoutOrchestrator } from "../payout/payout.orchestrator";
 import { logger } from "../../utils/logger";
 import { generateTransactionNumber, generateReferenceNumber } from "../../utils/id-generator";
-
-const payoutOrchestrator = new PayoutOrchestrator();
 
 export class TransferOrchestrator {
   async createTransfer(data: { beneficiaryId: string; amount: number; payoutMethod: string; currency?: string }, userId: string) {
@@ -72,10 +69,6 @@ export class TransferOrchestrator {
         entityId: t.id,
         userId,
         metadata: { amount: data.amount, payoutMethod: data.payoutMethod, transactionNumber },
-      });
-
-      payoutOrchestrator.execute({ ...t, payoutOrderId: payoutOrder.id, beneficiaryId: data.beneficiaryId }).catch((err) => {
-        logger.error(`[TRANSFER] Auto-payout failed for transfer ${t.id}: ${err.message}`);
       });
 
       return { ...t, payoutOrderId: payoutOrder.id, transactionNumber };
