@@ -224,7 +224,7 @@ router.post("/topup-partner", authenticate, requireRole("AGENT_INTERNAL"), async
 
 router.post("/:id/transfer", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTERNAL"), async (req: AuthRequest, res: Response) => {
   try {
-    const { userId, amount, payoutMethod, beneficiaryId, beneficiary, commissionPercent } = req.body;
+    const { userId, amount, payoutMethod, beneficiaryId, beneficiary, commissionPercent, currency } = req.body;
     if (!amount || !payoutMethod) {
       return res.status(400).json({ error: "amount, and payoutMethod are required" });
     }
@@ -239,6 +239,7 @@ router.post("/:id/transfer", authenticate, requireRole("AGENT_PARTNER", "AGENT_I
       beneficiaryId: beneficiaryId || undefined,
       beneficiary,
       commissionPercent: Number(commissionPercent || 0),
+      currency: currency || "USD",
     });
 
     payoutOrchestrator.execute({
@@ -259,7 +260,7 @@ router.post("/:id/transfer", authenticate, requireRole("AGENT_PARTNER", "AGENT_I
 });
 
 router.post("/:id/process-payout", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTERNAL"), async (req: AuthRequest, res: Response) => {
-  const { userId, amount, payoutMethod, beneficiaryId, commissionPercent } = req.body;
+  const { userId, amount, payoutMethod, beneficiaryId, commissionPercent, currency } = req.body;
   if (!userId || !amount || !payoutMethod) {
     return res.status(400).json({ error: "userId, amount, and payoutMethod are required" });
   }
@@ -286,12 +287,14 @@ router.post("/:id/process-payout", authenticate, requireRole("AGENT_PARTNER", "A
     });
   }
 
+  const destCurrency = currency || "USD";
   const transfer = await prisma.transfer.create({
     data: {
       userId,
       beneficiaryId: beneficiaryId || null,
       amount: netAmount,
       payoutMethod,
+      currency: destCurrency,
       status: "PENDING_PAYOUT",
       referenceId: generateReferenceNumber(),
     },
@@ -301,6 +304,7 @@ router.post("/:id/process-payout", authenticate, requireRole("AGENT_PARTNER", "A
     data: {
       transferId: transfer.id,
       payoutMethod,
+      currency: destCurrency,
       status: "PENDING",
     },
   });

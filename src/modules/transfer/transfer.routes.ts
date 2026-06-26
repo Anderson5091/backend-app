@@ -3,6 +3,8 @@ import { Router, Response } from "express";
 import { prisma } from "../../config/database";
 import { authenticate, AuthRequest } from "../../middleware/auth";
 import { idempotencyMiddleware } from "../../middleware/idempotency.middleware";
+import { fxService } from "../fx/fx.service";
+import { feeService } from "../fees/fee.service";
 import { TransferOrchestrator } from "./transfer.orchestrator";
 
 const router = Router();
@@ -11,20 +13,18 @@ const createSchema = z.object({
   beneficiaryId: z.string(),
   amount: z.number().positive(),
   payoutMethod: z.enum(["BANK", "MOBILE_MONEY", "CASH_PICKUP"]),
+  currency: z.string().default("USD"),
 });
 
 const orchestrator = new TransferOrchestrator();
 
 router.post("/quote", async (req: AuthRequest, res: Response) => {
   const { amount, currency, country, method } = req.body;
-  const fxService = await import("../fx/fx.service").then(m => m.fxService);
-  const feeService = await import("../fees/fee.service").then(m => m.feeService);
-
-  const fxRate = await fxService.getRate("USDT", currency);
+  const fxRate = await fxService.getRate("USDT", currency || "USD");
   const { fee } = await feeService.calculate(country, method, amount);
   const destinationAmount = (amount - fee) * fxRate;
 
-  res.json({ amount, fee, fxRate, destinationAmount });
+  res.json({ amount, fee, fxRate, destinationAmount, currency: currency || "USD" });
 });
 
 router.post("/", authenticate, idempotencyMiddleware, async (req: AuthRequest, res: Response) => {

@@ -8,7 +8,7 @@ const router = Router();
 
 const quoteSchema = z.object({
   amount: z.number().positive(),
-  currency: z.string(),
+  currency: z.string().default("USD"),
   country: z.string(),
   method: z.enum(["BANK", "MOBILE_MONEY", "CASH_PICKUP"]),
 });
@@ -25,6 +25,7 @@ router.post("/quote", authenticate, async (req: AuthRequest, res: Response) => {
     fee,
     fxRate,
     destinationAmount,
+    currency: data.currency,
   });
 });
 

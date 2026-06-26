@@ -248,6 +248,7 @@ export class AgentService {
         cashPickupLocation?: string;
       };
       commissionPercent: number;
+      currency?: string;
     }
   ) {
     const agent = await prisma.agent.findUnique({
@@ -322,12 +323,14 @@ export class AgentService {
 
     const referenceId = generateReferenceNumber();
 
+    const currency = payload.currency || "USD";
     const transfer = await prisma.transfer.create({
       data: {
         userId: payload.userId || null,
         beneficiaryId,
         amount: netAmount,
         payoutMethod: payload.payoutMethod,
+        currency,
         status: "PENDING_PAYOUT",
         referenceId,
       },
@@ -337,6 +340,7 @@ export class AgentService {
       data: {
         transferId: transfer.id,
         payoutMethod: payload.payoutMethod,
+        currency,
         status: "PENDING",
       },
     });
