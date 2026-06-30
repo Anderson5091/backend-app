@@ -495,7 +495,13 @@ export class AgentService {
     const todayTx = agentTransactions.filter((t) => new Date(t.createdAt) >= today);
 
     const pendingTransfers = await prisma.transfer.findMany({
-      where: { status: { in: ["PENDING_PAYOUT", "PROCESSING"] } },
+      where: {
+        status: { in: ["PENDING_PAYOUT", "PROCESSING"] },
+        OR: [
+          { processingAgentId: null },
+          { processingAgentId: agentId }
+        ]
+      },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
@@ -667,6 +673,25 @@ export class AgentService {
       { key: "WEEKLY", start: weekStart, end: weekEnd },
       { key: "MONTHLY", start: monthStart, end: monthEnd },
     ];
+  }
+
+  async lookupUser(identifier: string) {
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: identifier },
+          { email: identifier },
+          { phone: identifier },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+      },
+    });
+    return user;
   }
 }
 
