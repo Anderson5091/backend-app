@@ -213,6 +213,7 @@ export class AgentService {
       };
       commissionPercent: number;
       currency?: string;
+      debitUserWallet?: boolean;
     }
   ) {
     const agent = await prisma.agent.findUnique({
@@ -224,37 +225,41 @@ export class AgentService {
     const commission = (payload.amount * payload.commissionPercent) / 100;
     const netAmount = payload.amount - commission;
 
-    if (agent.type === "INTERNAL") {
-      const hotWallet = await prisma.treasuryWallet.findFirst({ where: { walletType: "HOT" } });
-      if (!hotWallet) throw new Error("System hot treasury not found");
-      if (Number(hotWallet.balance) < payload.amount) {
-        throw new Error("Insufficient system treasury balance");
+    const shouldDebitAgent = !payload.debitUserWallet || !payload.userId;
+
+    if (shouldDebitAgent) {
+      if (agent.type === "INTERNAL") {
+        const hotWallet = await prisma.treasuryWallet.findFirst({ where: { walletType: "HOT" } });
+        if (!hotWallet) throw new Error("System hot treasury not found");
+        if (Number(hotWallet.balance) < payload.amount) {
+          throw new Error("Insufficient system treasury balance");
+        }
+        await prisma.treasuryWallet.update({
+          where: { id: hotWallet.id },
+          data: { balance: { decrement: payload.amount } },
+        });
+        await prisma.treasuryMovement.create({
+          data: {
+            fromWallet: "HOT",
+            toWallet: "AGENT_TRANSFER",
+            fromWalletId: hotWallet.id,
+            amount: payload.amount,
+            network: hotWallet.network,
+            reason: `Internal agent ${agentId} transfer to beneficiary`,
+            status: "COMPLETED",
+          },
+        });
+      } else {
+        const wallet = (agent.wallets as AgentWalletRow[]).find((w) => w.walletType === "MAIN" || w.walletType === "BASE_TREASURY");
+        if (!wallet) throw new Error("Agent wallet not found");
+        if (Number(wallet.balance) < payload.amount) {
+          throw new Error("Insufficient agent wallet balance. Request top-up from internal agent.");
+        }
+        await prisma.agentWallet.update({
+          where: { id: wallet.id },
+          data: { balance: { decrement: payload.amount } },
+        });
       }
-      await prisma.treasuryWallet.update({
-        where: { id: hotWallet.id },
-        data: { balance: { decrement: payload.amount } },
-      });
-      await prisma.treasuryMovement.create({
-        data: {
-          fromWallet: "HOT",
-          toWallet: "AGENT_TRANSFER",
-          fromWalletId: hotWallet.id,
-          amount: payload.amount,
-          network: hotWallet.network,
-          reason: `Internal agent ${agentId} transfer to beneficiary`,
-          status: "COMPLETED",
-        },
-      });
-    } else {
-      const wallet = (agent.wallets as AgentWalletRow[]).find((w) => w.walletType === "MAIN" || w.walletType === "BASE_TREASURY");
-      if (!wallet) throw new Error("Agent wallet not found");
-      if (Number(wallet.balance) < payload.amount) {
-        throw new Error("Insufficient agent wallet balance. Request top-up from internal agent.");
-      }
-      await prisma.agentWallet.update({
-        where: { id: wallet.id },
-        data: { balance: { decrement: payload.amount } },
-      });
     }
 
     if (commission > 0) {
@@ -271,7 +276,7 @@ export class AgentService {
       beneficiaryId: payload.beneficiaryId,
       beneficiary: payload.beneficiary,
       currency: payload.currency,
-      skipWalletDebit: true,
+      skipWalletDebit: shouldDebitAgent,
     });
 
     const agentTx = await prisma.agentTransaction.create({
@@ -290,13 +295,14 @@ export class AgentService {
           isRegistered: !!payload.userId,
           senderAgentId: agentId,
           senderAgentEmail: agent.email,
+          debitUserWallet: !shouldDebitAgent,
         },
       },
     });
 
     await this.recordKpi(agentId, payload.amount, commission);
 
-    logger.info(`[Agent] Agent ${agentId} transferred ${netAmount} USDT to beneficiary ${transfer.beneficiaryId}`);
+    logger.info(`[Agent] Agent ${agentId} transferred ${netAmount} USDT to beneficiary ${transfer.beneficiaryId} (debitUserWallet: ${!shouldDebitAgent})`);
     return { agentTx, transfer };
   }
 
