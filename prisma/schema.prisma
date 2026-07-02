@@ -7,7 +7,7 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid())
+  id              String           @id
   email           String           @unique
   phone           String?
   password        String
@@ -30,7 +30,7 @@ model User {
 }
 
 model OtpCode {
-  id        String   @id @default(cuid())
+  id        String   @id
   userId    String?
   code      String
   type      String   @default("PHONE_VERIFICATION")
@@ -44,7 +44,7 @@ model OtpCode {
 }
 
 model Wallet {
-  id                String              @id @default(cuid())
+  id                String              @id
   userId            String              @unique
   currency          String              @default("USDT")
   status            String              @default("ACTIVE")
@@ -59,7 +59,7 @@ model Wallet {
 }
 
 model WalletAddress {
-  id       String @id @default(cuid())
+  id       String @id
   walletId String
   network  String
   address  String @unique
@@ -67,7 +67,7 @@ model WalletAddress {
 }
 
 model WalletTransaction {
-  id                String   @id @default(cuid())
+  id                String   @id
   walletId          String
   type              String
   amount            Decimal  @db.Decimal(24, 8)
@@ -81,7 +81,7 @@ model WalletTransaction {
 }
 
 model LedgerEntry {
-  id        String   @id @default(cuid())
+  id        String   @id
   walletId  String
   type      String
   amount    Decimal  @db.Decimal(24, 8)
@@ -93,7 +93,7 @@ model LedgerEntry {
 }
 
 model Beneficiary {
-  id                 String    @id @default(cuid())
+  id                 String    @id
   userId             String?
   fullName           String
   country            String
@@ -109,7 +109,7 @@ model Beneficiary {
 }
 
 model FxRate {
-  id           String   @id @default(cuid())
+  id           String   @id
   fromCurrency String
   toCurrency   String
   rate         Decimal  @db.Decimal(24, 8)
@@ -120,7 +120,7 @@ model FxRate {
 }
 
 model FeeRule {
-  id           String  @id @default(cuid())
+  id           String  @id
   country      String
   payoutMethod String
   fixedFee     Decimal @db.Decimal(24, 8)
@@ -128,7 +128,7 @@ model FeeRule {
 }
 
 model Transfer {
-  id                  String       @id @default(cuid())
+  id                  String       @id
   userId              String?
   beneficiaryId       String?
   amount              Decimal      @db.Decimal(24, 8)
@@ -151,7 +151,7 @@ model Transfer {
 }
 
 model PayoutOrder {
-  id                String        @id @default(cuid())
+  id                String        @id
   transferId        String        @unique
   partner           String?
   payoutMethod      String?
@@ -167,7 +167,7 @@ model PayoutOrder {
 }
 
 model PayoutEvent {
-  id            String      @id @default(cuid())
+  id            String      @id
   payoutOrderId String
   eventType     String
   payload       Json?
@@ -176,7 +176,7 @@ model PayoutEvent {
 }
 
 model PartnerLog {
-  id            String      @id @default(cuid())
+  id            String      @id
   payoutOrderId String
   partner       String
   request       Json?
@@ -187,7 +187,7 @@ model PartnerLog {
 }
 
 model TreasuryWallet {
-  id                String             @id @default(cuid())
+  id                String             @id
   walletType        String
   network           String
   chain             String
@@ -205,7 +205,7 @@ model TreasuryWallet {
 }
 
 model TreasuryMovement {
-  id           String          @id @default(cuid())
+  id           String          @id
   fromWalletId String?
   toWalletId   String?
   fromWallet   String
@@ -221,7 +221,7 @@ model TreasuryMovement {
 }
 
 model LiquiditySnapshot {
-  id           String   @id @default(cuid())
+  id           String   @id
   network      String
   chain        String
   hotBalance   Decimal  @db.Decimal(24, 8)
@@ -232,7 +232,7 @@ model LiquiditySnapshot {
 }
 
 model DepositRequest {
-  id              String         @id @default(cuid())
+  id              String         @id
   userId          String
   chain           String
   token           String         @default("USDT")
@@ -249,7 +249,7 @@ model DepositRequest {
 }
 
 model DepositWallet {
-  id                String           @id @default(cuid())
+  id                String           @id
   crossmintWalletId String
   walletLocator     String
   address           String
@@ -267,7 +267,7 @@ model DepositWallet {
 }
 
 model Withdrawal {
-  id                 String   @id @default(cuid())
+  id                 String   @id
   userId             String
   walletId           String?
   amount             Decimal  @db.Decimal(24, 8)
@@ -283,7 +283,7 @@ model Withdrawal {
 }
 
 model KycProfile {
-  id          String   @id @default(cuid())
+  id          String   @id
   userId      String   @unique
   tier        Int      @default(1)
   status      String   @default("PENDING")
@@ -297,7 +297,7 @@ model KycProfile {
 }
 
 model KycDocument {
-  id           String   @id @default(cuid())
+  id           String   @id
   userId       String
   documentType String
   fileUrl      String?
@@ -307,7 +307,7 @@ model KycDocument {
 }
 
 model AmlCheck {
-  id            String   @id @default(cuid())
+  id            String   @id
   userId        String?
   transactionId String?
   riskLevel     String?
@@ -317,7 +317,7 @@ model AmlCheck {
 }
 
 model SanctionsHit {
-  id         String   @id @default(cuid())
+  id         String   @id
   userId     String?
   matchName  String?
   listSource String?
@@ -327,7 +327,7 @@ model SanctionsHit {
 }
 
 model ComplianceCase {
-  id            String   @id @default(cuid())
+  id            String   @id
   userId        String?
   transactionId String?
   status        String?
@@ -338,7 +338,7 @@ model ComplianceCase {
 }
 
 model RiskScore {
-  id        String   @id @default(cuid())
+  id        String   @id
   userId    String   @unique
   score     Int?
   level     String?
@@ -357,7 +357,7 @@ model IdempotencyKey {
 }
 
 model Event {
-  id          String   @id @default(cuid())
+  id          String   @id
   aggregateId String
   type        String
   payload     Json?
@@ -368,7 +368,7 @@ model Event {
 }
 
 model Notification {
-  id         String                 @id @default(cuid())
+  id         String                 @id
   userId     String?
   type       String?
   channel    String?
@@ -381,7 +381,7 @@ model Notification {
 }
 
 model NotificationDelivery {
-  id             String        @id @default(cuid())
+  id             String        @id
   notificationId String?
   provider       String?
   status         String?
@@ -392,7 +392,7 @@ model NotificationDelivery {
 }
 
 model EventLog {
-  id        String   @id @default(cuid())
+  id        String   @id
   eventType String
   entity    String?
   entityId  String?
@@ -401,7 +401,7 @@ model EventLog {
 }
 
 model Partner {
-  id           String               @id @default(cuid())
+  id           String               @id
   name         String
   type         String
   country      String?
@@ -416,7 +416,7 @@ model Partner {
 }
 
 model PartnerTransaction {
-  id                String   @id @default(cuid())
+  id                String   @id
   transferId        String?
   partnerId         String?
   externalReference String?
@@ -428,7 +428,7 @@ model PartnerTransaction {
 }
 
 model PartnerWebhook {
-  id        String   @id @default(cuid())
+  id        String   @id
   partnerId String?
   eventType String?
   payload   Json?
@@ -438,7 +438,7 @@ model PartnerWebhook {
 }
 
 model PartnerSlaMetric {
-  id                String   @id @default(cuid())
+  id                String   @id
   partnerId         String   @unique
   successRate       Float?
   avgResponseTimeMs Int?
@@ -448,7 +448,7 @@ model PartnerSlaMetric {
 }
 
 model AdminUser {
-  id           String   @id @default(cuid())
+  id           String   @id
   email        String   @unique
   passwordHash String
   role         String   @default("OPS")
@@ -457,7 +457,7 @@ model AdminUser {
 }
 
 model Agent {
-  id               String             @id @default(cuid())
+  id               String             @id
   email            String             @unique
   phone            String?
   fullName         String?
@@ -476,7 +476,7 @@ model Agent {
 }
 
 model AgentLedgerEntry {
-  id        String   @id @default(cuid())
+  id        String   @id
   agentId   String
   type      String
   category  String
@@ -489,7 +489,7 @@ model AgentLedgerEntry {
 }
 
 model AgentWallet {
-  id                String   @id @default(cuid())
+  id                String   @id
   agentId           String
   walletType        String
   network           String   @default("BASE")
@@ -506,7 +506,7 @@ model AgentWallet {
 }
 
 model AgentTransaction {
-  id         String   @id @default(cuid())
+  id         String   @id
   agentId    String
   type       String
   amount     Decimal  @db.Decimal(24, 8)
@@ -521,7 +521,7 @@ model AgentTransaction {
 }
 
 model AgentKpi {
-  id              String   @id @default(cuid())
+  id              String   @id
   agentId         String
   period          String
   periodStart     DateTime
@@ -538,7 +538,7 @@ model AgentKpi {
 }
 
 model AdminActionLog {
-  id        String   @id @default(cuid())
+  id        String   @id
   adminId   String?
   action    String
   entity    String?
@@ -548,7 +548,7 @@ model AdminActionLog {
 }
 
 model SystemAlert {
-  id        String   @id @default(cuid())
+  id        String   @id
   severity  String   @default("MEDIUM")
   type      String?
   message   String?

@@ -42,34 +42,27 @@ router.post("/create", authenticate, requireRole("SUPER_ADMIN", "OPS"), async (r
   const network = "BASE";
   const chain = "base" as ChainType;
 
+  let crossmintWallet;
   try {
     const alias = `agent_wallet_${agent.id}`;
-    const crossmintWallet = await crossmintService.createWallet(chain, "AGENT", agent.id, alias);
-
-    await prisma.agentWallet.create({
-      data: {
-        agentId: agent.id,
-        walletType: "MAIN",
-        network,
-        chain,
-        address: crossmintWallet.address,
-        crossmintWalletId: crossmintWallet.crossmintWalletId,
-        walletLocator: crossmintWallet.walletLocator,
-        balance: 0,
-      },
-    });
+    crossmintWallet = await crossmintService.createWallet(chain, "AGENT", agent.id, alias);
   } catch (error) {
-    await prisma.agentWallet.create({
-      data: {
-        agentId: agent.id,
-        walletType: "MAIN",
-        network,
-        chain,
-        address: `wallet_${agent.id}`,
-        balance: 0,
-      },
-    });
+    await prisma.agent.delete({ where: { id: agent.id } });
+    throw error;
   }
+
+  await prisma.agentWallet.create({
+    data: {
+      agentId: agent.id,
+      walletType: "MAIN",
+      network,
+      chain,
+      address: crossmintWallet.address,
+      crossmintWalletId: crossmintWallet.crossmintWalletId,
+      walletLocator: crossmintWallet.walletLocator,
+      balance: 0,
+    },
+  });
 
   await prisma.adminActionLog.create({
     data: {
@@ -238,16 +231,6 @@ router.post("/:id/toggle-status", authenticate, requireRole("SUPER_ADMIN"), asyn
   });
 
   res.json({ status: newStatus });
-});
-
-router.post("/:id/upgrade-wallet", authenticate, requireRole("SUPER_ADMIN", "OPS"), async (req: AuthRequest, res: Response) => {
-  try {
-    const result = await agentService.upgradeAgentWallet(String(req.params.id));
-    res.json(result);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Upgrade failed";
-    res.status(400).json({ error: message });
-  }
 });
 
 router.post("/:id/add-balance", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTERNAL"), async (req: AuthRequest, res: Response) => {
@@ -628,6 +611,24 @@ router.post("/:id/cancel-payout", authenticate, requireRole("AGENT_PARTNER", "AG
     res.json({ success: true, message: "Payout cancelled, transfer returned to pending pool", transferId });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to cancel payout";
+    res.status(400).json({ error: message });
+  }
+});
+
+router.post("/:id/swap", authenticate, requireRole("AGENT_PARTNER"), async (req: AuthRequest, res: Response) => {
+  try {
+    const { amount, direction } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "amount is required and must be greater than 0" });
+    }
+    if (!direction || !["TO_LEDGER", "TO_WALLET"].includes(direction)) {
+      return res.status(400).json({ error: "direction must be TO_LEDGER or TO_WALLET" });
+    }
+
+    const result = await agentService.swapFunds(String(req.params.id), Number(amount), direction);
+    res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Swap failed";
     res.status(400).json({ error: message });
   }
 });

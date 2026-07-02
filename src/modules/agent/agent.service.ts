@@ -439,73 +439,6 @@ export class AgentService {
     };
   }
 
-  async upgradeAgentWallet(agentId: string) {
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      include: { wallets: true },
-    });
-    if (!agent) throw new Error("Agent not found");
-
-    const agentWallets = agent.wallets as AgentWalletRow[];
-    const results: string[] = [];
-    const walletType = "MAIN";
-    const existing = agentWallets.find((w) => w.walletType === walletType);
-
-    if (!existing) {
-      try {
-        const alias = `agent_wallet_${agent.id}`;
-        const { crossmintService } = await import("../../services/crossmint.service");
-        const cw = await crossmintService.createWallet("base", "AGENT", agent.id, alias);
-        await prisma.agentWallet.create({
-          data: {
-            agentId,
-            walletType,
-            network: "BASE",
-            chain: "base",
-            address: cw.address,
-            crossmintWalletId: cw.crossmintWalletId,
-            walletLocator: cw.walletLocator,
-            balance: 0,
-          },
-        });
-        results.push(`${walletType}: created (${cw.address})`);
-      } catch {
-        await prisma.agentWallet.create({
-          data: {
-            agentId,
-            walletType,
-            network: "BASE",
-            chain: "base",
-            address: `wallet_${agent.id}`,
-            balance: 0,
-          },
-        });
-        results.push(`${walletType}: created (dummy)`);
-      }
-    } else if (existing.address.startsWith("MAIN_") || existing.address.startsWith("BASE_TREASURY_") || existing.address.startsWith("wallet_")) {
-      try {
-        const alias = `agent_wallet_${agent.id}`;
-        const { crossmintService } = await import("../../services/crossmint.service");
-        const cw = await crossmintService.createWallet("base", "AGENT", agent.id, alias);
-        await prisma.agentWallet.update({
-          where: { id: existing.id },
-          data: {
-            address: cw.address,
-            crossmintWalletId: cw.crossmintWalletId,
-            walletLocator: cw.walletLocator,
-          },
-        });
-        results.push(`${walletType}: upgraded (${cw.address})`);
-      } catch {
-        results.push(`${walletType}: upgrade failed, keeping existing`);
-      }
-    } else {
-      results.push(`${walletType}: already real`);
-    }
-
-    return { upgraded: true, results };
-  }
-
   async recordKpi(agentId: string, volume: number, commission: number) {
     const now = new Date();
     const periods = this.getKpiPeriods(now);
@@ -580,6 +513,75 @@ export class AgentService {
       },
     });
     return user;
+  }
+
+  async swapFunds(agentId: string, amount: number, direction: "TO_LEDGER" | "TO_WALLET"): Promise<{ swappedAmount: number; walletBalance: number; ledgerBalance: number }> {
+    if (amount <= 0) throw new Error("Amount must be greater than 0");
+
+    if (direction === "TO_LEDGER") {
+      const wallet = await prisma.agentWallet.findFirst({
+        where: { agentId, walletType: "MAIN" },
+      });
+      if (!wallet) throw new Error("Agent MAIN wallet not found");
+
+      const available = Number(wallet.balance);
+      if (available < amount) throw new Error("Insufficient wallet balance");
+
+      await prisma.agentWallet.update({
+        where: { id: wallet.id },
+        data: { balance: { decrement: amount } },
+      });
+
+      await agentLedgerService.credit(agentId, amount, "SWAP", `manual_swap_${agentId}_${Date.now()}`, "Manual swap from wallet to ledger");
+
+      await prisma.agentTransaction.create({
+        data: {
+          agentId,
+          type: "SWAP",
+          amount,
+          commission: 0,
+          netAmount: amount,
+          status: "COMPLETED",
+          reference: generateReferenceNumber(),
+          metadata: { direction: "TO_LEDGER", walletId: wallet.id },
+        },
+      });
+    } else {
+      const ledgerBalance = await agentLedgerService.getBalance(agentId);
+      if (ledgerBalance < amount) throw new Error("Insufficient ledger balance");
+
+      const wallet = await prisma.agentWallet.findFirst({
+        where: { agentId, walletType: "MAIN" },
+      });
+      if (!wallet) throw new Error("Agent MAIN wallet not found");
+
+      await agentLedgerService.debit(agentId, amount, "SWAP", `manual_swap_${agentId}_${Date.now()}`, "Manual swap from ledger to wallet");
+
+      await prisma.agentWallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: amount } },
+      });
+
+      await prisma.agentTransaction.create({
+        data: {
+          agentId,
+          type: "SWAP",
+          amount,
+          commission: 0,
+          netAmount: amount,
+          status: "COMPLETED",
+          reference: generateReferenceNumber(),
+          metadata: { direction: "TO_WALLET", walletId: wallet.id },
+        },
+      });
+    }
+
+    const ledgerBalance = await agentLedgerService.getBalance(agentId);
+    const wallet = await prisma.agentWallet.findFirst({
+      where: { agentId, walletType: "MAIN" },
+    });
+
+    return { swappedAmount: amount, walletBalance: wallet ? Number(wallet.balance) : 0, ledgerBalance };
   }
 }
 
