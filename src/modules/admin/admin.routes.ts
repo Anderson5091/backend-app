@@ -167,7 +167,7 @@ router.post("/compliance-cases/:id/escalate", authenticate, requireRole("SUPER_A
   res.json({ status: "ESCALATED" });
 });
 
-router.get("/payouts/failed", authenticate, requireRole("SUPER_ADMIN", "ADMIN", "OPS"), async (_req: AuthRequest, res: Response) => {
+router.get("/payouts/failed", authenticate, requireRole("SUPER_ADMIN", "ADMIN", "OPS", "TREASURY"), async (_req: AuthRequest, res: Response) => {
   const payouts = await prisma.payoutOrder.findMany({
     where: { status: "FAILED" },
     orderBy: { createdAt: "desc" },
@@ -497,7 +497,7 @@ router.delete("/admins/:id", authenticate, requireRole("SUPER_ADMIN"), async (re
   res.json({ success: true });
 });
 
-router.get("/transfers", authenticate, requireRole("SUPER_ADMIN", "ADMIN", "OPS"), async (_req: AuthRequest, res: Response) => {
+router.get("/transfers", authenticate, requireRole("SUPER_ADMIN", "ADMIN", "OPS", "TREASURY"), async (_req: AuthRequest, res: Response) => {
   const transfers = await prisma.transfer.findMany({
     include: {
       user: { select: { email: true, fullName: true } },
