@@ -193,9 +193,25 @@ router.post("/logout", (_req: Request, res: Response) => {
 router.get("/me", authenticate, async (req: AuthRequest, res: Response) => {
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
-    select: { id: true, email: true, phone: true, fullName: true, createdAt: true },
+    select: { id: true, email: true, phone: true, fullName: true, country: true, createdAt: true },
   });
   if (!user) throw new AppError(404, "User not found");
+  res.json(user);
+});
+
+const updateProfileSchema = z.object({
+  fullName: z.string().min(1).optional(),
+  phone: z.string().optional(),
+  country: z.string().optional(),
+});
+
+router.put("/me", authenticate, async (req: AuthRequest, res: Response) => {
+  const data = updateProfileSchema.parse(req.body);
+  const user = await prisma.user.update({
+    where: { id: req.userId },
+    data,
+    select: { id: true, email: true, phone: true, fullName: true, country: true, createdAt: true },
+  });
   res.json(user);
 });
 
