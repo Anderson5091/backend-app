@@ -557,3 +557,23 @@ model SystemAlert {
   status    String   @default("OPEN")
   createdAt DateTime @default(now())
 }
+
+model FeeConfig {
+  id                   String   @id
+  transactionType      String   @unique
+  label                String?
+  description          String?
+  systemFeeEnabled     Boolean  @default(true)
+  systemFeeMode        String   @default("BOTH")
+  systemFixedFee       Decimal  @default(0) @db.Decimal(24, 8)
+  systemPercentFee     Decimal  @default(0) @db.Decimal(5, 2)
+  processingFeeEnabled Boolean  @default(false)
+  processingFeeMode    String   @default("FIXED")
+  processingFixedFee   Decimal  @default(0) @db.Decimal(24, 8)
+  processingPercentFee Decimal  @default(0) @db.Decimal(5, 2)
+  superAdminOnly       Boolean  @default(false)
+  enabled              Boolean  @default(true)
+  updatedBy            String?
+  updatedAt            DateTime @updatedAt
+  createdAt            DateTime @default(now())
+}
