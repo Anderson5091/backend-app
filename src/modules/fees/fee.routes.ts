@@ -8,7 +8,7 @@ router.get("/", authenticate, requireRole("SUPER_ADMIN", "ADMIN", "OPS"), async 
   const configs = await prisma.feeConfig.findMany({
     orderBy: { createdAt: "asc" },
   });
-  res.json(configs.map((c) => ({
+  res.json(configs.map((c: any) => ({
     id: c.id,
     transactionType: c.transactionType,
     label: c.label,
