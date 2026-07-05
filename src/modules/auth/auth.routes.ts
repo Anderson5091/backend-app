@@ -215,4 +215,24 @@ router.put("/me", authenticate, async (req: AuthRequest, res: Response) => {
   res.json(user);
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+router.put("/password", authenticate, async (req: AuthRequest, res: Response) => {
+  const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user) throw new AppError(404, "User not found");
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) throw new AppError(400, "Current password is incorrect");
+
+  const password = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: req.userId }, data: { password } });
+
+  res.json({ message: "Password updated successfully" });
+});
+
 export { router as authRoutes };
