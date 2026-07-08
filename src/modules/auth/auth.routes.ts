@@ -41,7 +41,7 @@ async function createUserDepositWallets(userId: string) {
       });
       if (existing) continue;
 
-      const wallet = await crossmintService.createWallet(cfg.chain, "DEPOSIT", userId, cfg.alias);
+      const wallet = await crossmintService.createUserWallet(cfg.chain, "DEPOSIT", userId, cfg.alias);
 
       await prisma.depositWallet.create({
         data: {

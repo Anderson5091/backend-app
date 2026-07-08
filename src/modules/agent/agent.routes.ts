@@ -8,6 +8,7 @@ import { generateReferenceNumber } from "../../utils/id-generator";
 import { crossmintService } from "../../services/crossmint.service";
 import { ledgerService } from "../ledger/ledger.service";
 import { fxService } from "../fx/fx.service";
+import { logger } from "../../utils/logger";
 import type { ChainType } from "../../services/crossmint.service";
 
 const router = Router();
@@ -45,7 +46,7 @@ router.post("/create", authenticate, requireRole("SUPER_ADMIN", "OPS"), async (r
   let crossmintWallet;
   try {
     const alias = `agent_wallet_${agent.id}`;
-    crossmintWallet = await crossmintService.createWallet(chain, "AGENT", agent.id, alias);
+    crossmintWallet = await crossmintService.createUserWallet(chain, "AGENT", agent.id, alias);
   } catch (error) {
     await prisma.agent.delete({ where: { id: agent.id } });
     throw error;
@@ -326,7 +327,7 @@ router.post("/:id/transfer", authenticate, requireRole("AGENT_PARTNER", "AGENT_I
     res.json(result.agentTx);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Transfer failed";
-    console.error("[AGENT_TRANSFER] Error:", err);
+    logger.error("[AGENT_TRANSFER] Error:", err);
     res.status(400).json({ error: message });
   }
 });
