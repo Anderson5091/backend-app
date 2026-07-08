@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
+import { ENV } from "../../config/env";
 import { authenticate, AuthRequest, requireRole } from "../../middleware/auth";
 import { agentService } from "./agent.service";
 import { agentLedgerService } from "./agent-ledger.service";
@@ -40,30 +41,34 @@ router.post("/create", authenticate, requireRole("SUPER_ADMIN", "OPS"), async (r
     },
   });
 
-  const network = "BASE";
-  const chain = "base" as ChainType;
+  const evmChain = ENV.NETWORK_CHAIN[ENV.SUPPORTED_NETWORKS.indexOf("BASE")] as ChainType;
+  const solanaChain = ENV.NETWORK_CHAIN[ENV.SUPPORTED_NETWORKS.indexOf("SOLANA")] as ChainType;
 
-  let crossmintWallet;
+  const walletConfigs = [
+    { walletType: "MAIN", network: "BASE", chain: evmChain || ("base-sepolia" as ChainType), alias: `agent_wallet_${agent.id}_evm` },
+    { walletType: "SOLANA", network: "SOLANA", chain: solanaChain || ("solana" as ChainType), alias: `agent_wallet_${agent.id}_solana` },
+  ];
+
   try {
-    const alias = `agent_wallet_${agent.id}`;
-    crossmintWallet = await crossmintService.createUserWallet(chain, "AGENT", agent.id, alias);
+    for (const cfg of walletConfigs) {
+      const wallet = await crossmintService.createUserWallet(cfg.chain, "AGENT", agent.id, cfg.alias);
+      await prisma.agentWallet.create({
+        data: {
+          agentId: agent.id,
+          walletType: cfg.walletType,
+          network: cfg.network,
+          chain: cfg.chain,
+          address: wallet.address,
+          crossmintWalletId: wallet.crossmintWalletId,
+          walletLocator: wallet.walletLocator,
+          balance: 0,
+        },
+      });
+    }
   } catch (error) {
     await prisma.agent.delete({ where: { id: agent.id } });
     throw error;
   }
-
-  await prisma.agentWallet.create({
-    data: {
-      agentId: agent.id,
-      walletType: "MAIN",
-      network,
-      chain,
-      address: crossmintWallet.address,
-      crossmintWalletId: crossmintWallet.crossmintWalletId,
-      walletLocator: crossmintWallet.walletLocator,
-      balance: 0,
-    },
-  });
 
   await prisma.adminActionLog.create({
     data: {
@@ -637,15 +642,16 @@ router.post("/:id/cancel-payout", authenticate, requireRole("AGENT_PARTNER", "AG
 
 router.post("/:id/swap", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTERNAL"), async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, direction } = req.body;
+    const { amount, direction, walletType } = req.body;
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "amount is required and must be greater than 0" });
     }
     if (!direction || !["TO_LEDGER", "TO_WALLET"].includes(direction)) {
       return res.status(400).json({ error: "direction must be TO_LEDGER or TO_WALLET" });
     }
+    const wt = walletType || "MAIN";
 
-    const result = await agentService.swapFunds(String(req.params.id), Number(amount), direction);
+    const result = await agentService.swapFunds(String(req.params.id), Number(amount), direction, wt);
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Swap failed";
@@ -655,13 +661,14 @@ router.post("/:id/swap", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTER
 
 router.post("/:id/withdraw-wallet", authenticate, requireRole("AGENT_PARTNER", "AGENT_INTERNAL"), async (req: AuthRequest, res: Response) => {
   try {
-    const { amount } = req.body;
+    const { amount, walletType } = req.body;
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "amount is required and must be greater than 0" });
     }
+    const wt = walletType || "MAIN";
 
-    await agentService.walletWithdraw(String(req.params.id), Number(amount));
-    res.json({ success: true, message: `Successfully withdrew ${Number(amount)} USDT from wallet to hot treasury` });
+    await agentService.walletWithdraw(String(req.params.id), Number(amount), wt);
+    res.json({ success: true, message: `Successfully withdrew ${Number(amount)} USDT from ${wt} wallet to hot treasury` });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Wallet withdraw failed";
     res.status(400).json({ error: message });
