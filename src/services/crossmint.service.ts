@@ -128,7 +128,7 @@ class CrossmintService {
       const chainStr = String(chain).toLowerCase();
       const chainType = chainStr.includes("solana") ? "solana" : "evm";
       const walletLocator = alias 
-        ? `me:${chainType}:smart:alias:${alias}`
+        ? `${chainType}:smart:alias:${alias}`
         : wallet.address;
 
       return {
