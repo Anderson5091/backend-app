@@ -62,7 +62,7 @@ export interface OrderStatusResponse {
 }
 
 export type ChainType = Chain;
-export type WalletType = "HOT" | "WARM" | "COLD" | "DEPOSIT" | "REVENUE" | "AGENT";
+export type WalletType = "HOT" | "WARM" | "COLD" | "DEPOSIT" | "AGENT";
 
 export interface CrossmintWalletResult {
   crossmintWalletId: string;
@@ -97,7 +97,7 @@ class CrossmintService {
 
   async createTreasuryWallet(
     chain: ChainType,
-    type: "HOT" | "WARM" | "COLD" | "REVENUE",
+    type: "HOT" | "WARM" | "COLD",
     alias?: string
   ): Promise<CrossmintWalletResult> {
     const owner = "COMPANY";
@@ -207,6 +207,7 @@ class CrossmintService {
   ) {
     await this.ensureInitialized();
     const wallet = await this.getWallet(fromWalletLocator, chain);
+    (wallet as any).useSigner?.({ type: "server", secret: ENV.WALLET_SIGNER_SECRET });
     const tx = await wallet.send(toAddress, token, amount);
     return {
       txHash: tx.hash,
@@ -223,8 +224,12 @@ class CrossmintService {
     chain: ChainType
   ) {
     await this.ensureInitialized();
-    const wallet = await this.getWallet(fromWalletLocator, chain);
-    const tx = await wallet.send(toWalletLocator, token, amount);
+    const [wallet, toWallet] = await Promise.all([
+      this.getWallet(fromWalletLocator, chain),
+      this.getWallet(toWalletLocator, chain),
+    ]);
+    (wallet as any).useSigner?.({ type: "server", secret: ENV.WALLET_SIGNER_SECRET });
+    const tx = await wallet.send(toWallet.address, token, amount);
     return {
       txHash: tx.hash,
       explorerLink: tx.explorerLink,
